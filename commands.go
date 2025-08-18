@@ -1,10 +1,14 @@
 package main
 
 import (
+    "io"
     "fmt"
+    "html"
     "time"
     "errors"
     "context"
+    "net/http"
+    "encoding/xml"
 	"github.com/google/uuid"
     "github.com/sudonetizen/config"
     "github.com/sudonetizen/database"
@@ -32,6 +36,90 @@ func (c *commands) register(name string, f func(*state, command) error) {
 }
 
 //////////////////////////////////////////////////
+
+type RSSFeed struct {
+    Channel struct {
+        Title       string    `xml:"title"`
+        Link        string    `xml:"link"`
+        Description string    `xml:"description"`
+        Item        []RSSItem `xml:"item"`
+    } `xml:"channel"` 
+}
+
+type RSSItem struct {
+    Title       string `xml:"title"`
+    Link        string `xml:"link"`
+    Description string `xml:"description"`
+    PubDate     string `xml:"pubDate"`
+}
+
+func fetchFeed(s *state, cmd command) error {
+    if len(cmd.args) != 1 {return errors.New("no url provided or more than one url")}
+
+    req, err := http.NewRequestWithContext(context.Background(), "GET", cmd.args[0], nil)
+    if err != nil {return err} 
+
+    req.Header.Set("User-Agent", "gator")
+    
+    client := http.Client{}
+    res, err := client.Do(req)
+    if err != nil {return err}
+    defer res.Body.Close()
+
+    data, err := io.ReadAll(res.Body)
+    if err != nil {return err} 
+    
+    rss := RSSFeed{}
+    err = xml.Unmarshal(data, &rss)
+    if err != nil {return fmt.Errorf("error with unmarshal: %v", err)}
+
+    fmt.Printf("Title: %v\n", html.UnescapeString(rss.Channel.Title))
+    fmt.Printf("Link: %v\n", html.UnescapeString(rss.Channel.Link))
+    fmt.Printf("Description: %v\n\n", html.UnescapeString(rss.Channel.Description))
+
+    for _, i := range rss.Channel.Item {
+        fmt.Printf("Title: %v\n", html.UnescapeString(i.Title))
+        fmt.Printf("Published Date: %v\n", html.UnescapeString(i.PubDate))
+        fmt.Printf("Link: %v\n", html.UnescapeString(i.Link))
+        fmt.Printf("Description: %v\n\n", html.UnescapeString(i.Description))
+    }
+
+    return nil
+}
+
+func handlerFeeds(s *state, cmd command) error {
+    if len(cmd.args) != 0 {return errors.New("only command")}
+
+    feeds, err := s.db.GetFeeds(context.Background())
+    if err != nil {return err}    
+
+    for _, i := range feeds {
+        fmt.Printf("Name: %v\nUrl: %v\nAdded by User: %v\n\n", i.Name, i.Url, i.Name_2.String) 
+    } 
+    return nil 
+}
+
+func handlerAddFeed(s *state, cmd command) error {
+    ctx := context.Background()
+    if len(cmd.args) != 2 {return errors.New("less or more args provided")}
+    userID, err := s.db.GetUserId(ctx, s.cfgP.Current_user_name)
+    if err != nil {return fmt.Errorf("error with getting user id: %v\n", err)}
+
+    _, err = s.db.CreateFeed(
+        ctx, 
+        database.CreateFeedParams{
+            uuid.New(), 
+            time.Now().UTC(), 
+            time.Now().UTC(), 
+            cmd.args[0], 
+            cmd.args[1],  
+            userID,
+        },
+    )
+    if err != nil {return err} 
+    return nil
+}
+
 
 func handlerGetUsers(s *state, cmd command) error {
     ctx := context.Background()

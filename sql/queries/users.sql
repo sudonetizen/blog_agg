@@ -18,3 +18,5 @@ SELECT name FROM users;
 -- name: DeleteUsers :exec
 DELETE FROM users;
 
+-- name: GetUserId :one
+SELECT id FROM users WHERE name = $1; 

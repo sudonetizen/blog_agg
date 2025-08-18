@@ -32,12 +32,15 @@ func main() {
     cmm.register("register", handlerRegister)
     cmm.register("reset", handlerDeleteUsers)
     cmm.register("users", handlerGetUsers)
+    cmm.register("agg", fetchFeed)
+    cmm.register("addfeed", handlerAddFeed)
+    cmm.register("feeds", handlerFeeds)
 
     if len(os.Args) < 2 {
         fmt.Println("no arguments were provided")
         os.Exit(1)  
     }
-
+    
     cmnd := command{name: os.Args[1], args: os.Args[2:]} 
     err = cmm.run(&stt, cmnd)
     if err != nil {
