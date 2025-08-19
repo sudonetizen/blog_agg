@@ -87,6 +87,53 @@ func fetchFeed(s *state, cmd command) error {
     return nil
 }
 
+func handlerUserFeeds(s *state, cmd command) error {
+    if len(cmd.args) != 0 {return errors.New("only command")}
+    
+    feeds, err := s.db.GetFeedFollowsForUser(context.Background(), s.cfgP.Current_user_name)
+    if err != nil {return fmt.Errorf("error with feeds: %v\n", err)}
+    
+    for _, f := range feeds {
+        fmt.Printf("Feed: << %v >> followed by user %v\n",  f.Name_2.String, f.Name.String)
+    }
+
+    return nil
+}
+
+
+func handlerFeedFollow(s *state, cmd command) error {
+    if len(cmd.args) != 1 {return errors.New("no or more url provided")}
+    
+    userID, err := s.db.GetUserId(context.Background(), s.cfgP.Current_user_name)
+    if err != nil {return fmt.Errorf("error with getting user id: %v\n", err)}
+    feedID, err := s.db.GetFeedId(context.Background(), cmd.args[0])
+    if err != nil {return fmt.Errorf("error with getting feed id: %v\n", err)}
+
+    feedFollow, err := s.db.CreateFeedFollow(
+        context.Background(),
+        database.CreateFeedFollowParams{
+            uuid.New(), 
+            time.Now().UTC(), 
+            time.Now().UTC(), 
+            userID,
+            feedID, 
+        },
+    )
+    if err != nil {return fmt.Errorf("error with feed follow: %v\n", err)}
+    
+    fmt.Printf("ID: %v\nCreated: %v\nUpdated: %v\nUser ID: %v\nFeed ID: %v\nUser Name: %v\nFeed Name: %v\n",
+               feedFollow.ID,
+               feedFollow.CreatedAt,
+               feedFollow.UpdatedAt,
+               feedFollow.UserID,
+               feedFollow.FeedID, 
+               feedFollow.Name.String,
+               feedFollow.Name_2.String,
+    )
+
+    return nil
+}
+
 func handlerFeeds(s *state, cmd command) error {
     if len(cmd.args) != 0 {return errors.New("only command")}
 
@@ -117,6 +164,11 @@ func handlerAddFeed(s *state, cmd command) error {
         },
     )
     if err != nil {return err} 
+
+    cmd.args = []string{cmd.args[1]}
+    err = handlerFeedFollow(s, cmd)
+    if err != nil {return err} 
+    
     return nil
 }
 
