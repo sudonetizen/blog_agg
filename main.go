@@ -37,6 +37,7 @@ func main() {
     cmm.register("feeds", handlerFeeds)
     cmm.register("follow", handlerFeedFollow)
     cmm.register("following", handlerUserFeeds)
+    cmm.register("unfollow", handlerUnfollow)
 
     if len(os.Args) < 2 {
         fmt.Println("no arguments were provided")

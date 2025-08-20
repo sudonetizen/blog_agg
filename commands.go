@@ -14,6 +14,8 @@ import (
     "github.com/sudonetizen/database"
 )
 
+// command and commands structs and methods 
+
 type command struct {
     name string
     args []string 
@@ -35,7 +37,7 @@ func (c *commands) register(name string, f func(*state, command) error) {
     c.mapCommands[name] = f 
 }
 
-//////////////////////////////////////////////////
+// rss struct and related fetchFeed function
 
 type RSSFeed struct {
     Channel struct {
@@ -52,6 +54,8 @@ type RSSItem struct {
     Description string `xml:"description"`
     PubDate     string `xml:"pubDate"`
 }
+
+// command -> agg
 
 func fetchFeed(s *state, cmd command) error {
     if len(cmd.args) != 1 {return errors.New("no url provided or more than one url")}
@@ -87,6 +91,24 @@ func fetchFeed(s *state, cmd command) error {
     return nil
 }
 
+// command -> unfollow
+
+func handlerUnfollow(s *state, cmd command) error {
+    if len(cmd.args) != 1 {return errors.New("only one url should be provided after url")}
+
+    userID, err := s.db.GetUserId(context.Background(), s.cfgP.Current_user_name)
+    if err != nil {return fmt.Errorf("error with getting user id: %v\n", err)}
+    feedID, err := s.db.GetFeedId(context.Background(), cmd.args[0])
+    if err != nil {return fmt.Errorf("error with getting feed id: %v\n", err)}
+    
+    err = s.db.UnfollowFeed(context.Background(), database.UnfollowFeedParams{userID, feedID})
+    if err != nil {return fmt.Errorf("error with unfollowing feed: %v\n", err)}
+    
+    return nil
+}
+
+// command -> following
+
 func handlerUserFeeds(s *state, cmd command) error {
     if len(cmd.args) != 0 {return errors.New("only command")}
     
@@ -100,6 +122,7 @@ func handlerUserFeeds(s *state, cmd command) error {
     return nil
 }
 
+// command -> follow 
 
 func handlerFeedFollow(s *state, cmd command) error {
     if len(cmd.args) != 1 {return errors.New("no or more url provided")}
@@ -134,6 +157,8 @@ func handlerFeedFollow(s *state, cmd command) error {
     return nil
 }
 
+// command -> feeds
+
 func handlerFeeds(s *state, cmd command) error {
     if len(cmd.args) != 0 {return errors.New("only command")}
 
@@ -145,6 +170,8 @@ func handlerFeeds(s *state, cmd command) error {
     } 
     return nil 
 }
+
+// command -> addfeed
 
 func handlerAddFeed(s *state, cmd command) error {
     ctx := context.Background()
@@ -172,6 +199,7 @@ func handlerAddFeed(s *state, cmd command) error {
     return nil
 }
 
+// command -> users
 
 func handlerGetUsers(s *state, cmd command) error {
     ctx := context.Background()
@@ -189,6 +217,7 @@ func handlerGetUsers(s *state, cmd command) error {
     return nil
 }
 
+// command -> reset 
 
 func handlerDeleteUsers(s *state, cmd command) error {
     ctx := context.Background() 
@@ -203,6 +232,8 @@ func handlerDeleteUsers(s *state, cmd command) error {
     return nil
 }
 
+// command -> login 
+
 func handlerLogin(s *state, cmd command) error {
     ctx := context.Background() 
     if len(cmd.args) != 1 {return errors.New("no username provided or more than one username")}
@@ -213,6 +244,8 @@ func handlerLogin(s *state, cmd command) error {
     fmt.Println("user has been set")
     return nil
 }
+
+// command -> register
 
 func handlerRegister(s *state, cmd command) error {
     ctx := context.Background() 
