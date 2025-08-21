@@ -32,12 +32,13 @@ func main() {
     cmm.register("register", handlerRegister)
     cmm.register("reset", handlerDeleteUsers)
     cmm.register("users", handlerGetUsers)
-    cmm.register("agg", fetchFeed)
+    cmm.register("agg", aggLoop)
     cmm.register("addfeed", handlerAddFeed)
     cmm.register("feeds", handlerFeeds)
     cmm.register("follow", handlerFeedFollow)
     cmm.register("following", handlerUserFeeds)
     cmm.register("unfollow", handlerUnfollow)
+    cmm.register("browse", handlerBrowse)
 
     if len(os.Args) < 2 {
         fmt.Println("no arguments were provided")

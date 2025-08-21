@@ -7,7 +7,9 @@ import (
     "time"
     "errors"
     "context"
+    "strconv"
     "net/http"
+    "database/sql"
     "encoding/xml"
 	"github.com/google/uuid"
     "github.com/sudonetizen/config"
@@ -55,8 +57,6 @@ type RSSItem struct {
     PubDate     string `xml:"pubDate"`
 }
 
-// command -> agg
-
 func fetchFeed(s *state, cmd command) error {
     if len(cmd.args) != 1 {return errors.New("no url provided or more than one url")}
 
@@ -81,15 +81,108 @@ func fetchFeed(s *state, cmd command) error {
     fmt.Printf("Link: %v\n", html.UnescapeString(rss.Channel.Link))
     fmt.Printf("Description: %v\n\n", html.UnescapeString(rss.Channel.Description))
 
+    // printing feed and saving it to posts table 
+    feedID, err := s.db.GetFeedId(context.Background(), cmd.args[0])
+    if err != nil {return fmt.Errorf("error with getting feed id: %v\n", err)}
+
     for _, i := range rss.Channel.Item {
         fmt.Printf("Title: %v\n", html.UnescapeString(i.Title))
         fmt.Printf("Published Date: %v\n", html.UnescapeString(i.PubDate))
         fmt.Printf("Link: %v\n", html.UnescapeString(i.Link))
         fmt.Printf("Description: %v\n\n", html.UnescapeString(i.Description))
+
+        _, err := s.db.GetPost(context.Background(), html.UnescapeString(i.Link))
+        if err == nil {continue}
+
+        _, err = s.db.CreatePost(
+            context.Background(),
+            database.CreatePostParams{
+                uuid.New(), 
+                time.Now().UTC(), 
+                time.Now().UTC(), 
+                html.UnescapeString(i.Title),
+                html.UnescapeString(i.Link),
+                html.UnescapeString(i.Description),
+                html.UnescapeString(i.PubDate),
+                feedID,
+            },
+        )
+        if err != nil {return fmt.Errorf("error with creating post: %v\n", err)}        
+
+    }
+
+     
+
+    return nil
+}
+
+// aggregator loop // command -> agg
+
+func aggLoop(s *state, cmd command) error {
+    if len(cmd.args) != 1 {return errors.New(" enter seconds interval between fetching feeds")}
+
+    x, err := strconv.Atoi(cmd.args[0])
+    if err != nil {return fmt.Errorf("bad number: %v\n", err)}
+
+    fmt.Printf("Interval between fetching feeds: %v\n", x)
+
+    for {
+        err := aggregator(s, cmd)
+        if err != nil {return fmt.Errorf("error with aggregator at loop: %v\n", err)}
+        time.Sleep(time.Duration(x) * time.Second)
+    } 
+    
+
+    return nil
+}
+
+// aggregator 
+
+func aggregator(s *state, cmd command) error {
+    
+    feed, err := s.db.GetNextFeedToFetch(context.Background())
+    if err != nil {return fmt.Errorf("error with getting next feed to fetch: %v\n", err)}
+    
+    err = s.db.MarkFeedFetched(
+        context.Background(),
+        database.MarkFeedFetchedParams{
+            time.Now().UTC(),
+            sql.NullTime{Time: time.Now().UTC(), Valid: true},
+            feed.ID,
+        },
+    )
+    if err != nil {return fmt.Errorf("error with marking fetched feed: %v\n", err)}
+
+    cmd.args = []string{feed.Url}
+    err = fetchFeed(s, cmd)
+    if err != nil {return fmt.Errorf("error with fetching feed: %v\n", err)} 
+
+    return nil
+}
+
+
+// command -> browse
+
+func handlerBrowse(s *state, cmd command) error {
+    if len(cmd.args) == 0 {cmd.args = []string{"2"}}
+    if len(cmd.args) != 1 {return errors.New("how many post wanna see")}
+    
+    x, err := strconv.Atoi(cmd.args[0])
+    if err != nil {return err}
+
+    posts, err := s.db.GetPostsForUser(context.Background(), int32(x))    
+    if err != nil {return err}
+    
+    fmt.Printf("total posts: %v\n\n", len(posts))
+    for _, p := range posts {
+       fmt.Printf("Title: %v\n", p.Title) 
+       fmt.Printf("Url: %v\n", p.Url) 
+       fmt.Printf("Created: %v\n\n", p.CreatedAt) 
     }
 
     return nil
 }
+
 
 // command -> unfollow
 
